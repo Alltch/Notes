@@ -17,3 +17,16 @@ class Note(models.Model):
         verbose_name_plural = 'Notes'
         verbose_name = 'Note'
         ordering = ['-created_at']
+
+
+
+class Friend(models.Model):
+    user = models.ForeignKey(User, related_name='friends', on_delete=models.CASCADE)
+    friend = models.ForeignKey(User, related_name='friends_with', on_delete=models.CASCADE)
+
+    def __str__(self):
+        return f'{self.user} - {self.friend}'
+    
+    class Meta:
+        verbose_name_plural = 'Friends'
+        verbose_name = 'Friend'

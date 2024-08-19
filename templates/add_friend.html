@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+
+{% block title %}Friends{% endblock %}
+
+{% block content %}
+<h1>Friends List</h1>
+
+<form method="get" action="{% url 'friends' %}">
+    <input type="text" name="q" placeholder="Search friends by username..." value="{{ query }}" class="form-control mb-3">
+    <button type="submit" class="btn btn-primary mb-3">Search</button>
+</form>
+
+<ul>
+    {% for friend in friends %}
+        <li>
+            {% if query %}
+                <a href="{% url 'other-profile' friend.id %}">{{ friend.username }}</a>
+            {% else %}
+                {{ friend.friend.username }}
+            {% endif %}
+        </li>
+    {% empty %}
+        <li>No friends found.</li>
+    {% endfor %}
+</ul>
+{% endblock %}

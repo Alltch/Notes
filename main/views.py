@@ -1,9 +1,10 @@
 from django.shortcuts import render, redirect, get_object_or_404
+from django.http import JsonResponse
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib import messages
-from .models import Note
+from .models import Note, Friend
 
 
 @login_required(login_url='login')
@@ -22,9 +23,7 @@ def other_posts(request):
         'notes': all_notes
     }
 
-    return render(request, 'other_posts.html', context=context) 
-
-
+    return render(request, 'other_posts.html', context=context)
 
 
 
@@ -181,17 +180,88 @@ def note_add(request):
     return render(request, 'note_add.html')
 
 
+
+
+@login_required(login_url='login')
+def friends_list(request):
+    query = request.GET.get('q')
+    if query:
+        friends = User.objects.filter(username__icontains=query)
+    else:
+        friends = Friend.objects.filter(user=request.user)
+
+    return render(request, 'friends_list.html', {'friends': friends, 'query': query})
+
+
+
+
+
+@login_required(login_url='login')
+def add_friend(request):
+    if request.method == 'POST':
+        friend_username = request.POST.get('friend_username')
+        friend_user = get_object_or_404(User, username=friend_username)
+
+        if not Friend.objects.filter(user=request.user, friend=friend_user).exists() and not Friend.objects.filter(user=friend_user, friend=request.user).exists():
+            Friend.objects.create(user=request.user, friend=friend_user)
+        
+        return redirect('friends')
+
+    return render(request, 'add_friend.html')
+
+
+@login_required(login_url='login')
+def profile_view(request, user_id):
+    profile_user = get_object_or_404(User, id=user_id)
+    is_friend = Friend.objects.filter(user=request.user, friend=profile_user).exists()
+    
+    context = {
+        'profile_user': profile_user,
+        'is_own_profile': request.user == profile_user,
+        'is_friend': is_friend,
+    }
+    return render(request, 'profile.html', context)
+
+
+
+@login_required(login_url='login')
+def search_friends(request):
+    query = request.GET.get('q', '')
+    if query:
+        users = User.objects.filter(username__icontains=query).exclude(id=request.user.id)
+    else:
+        users = User.objects.none()
+
+    results = [{'id': user.id, 'username': user.username} for user in users]
+    return JsonResponse(results, safe=False)
+
+
+
+
 @login_required(login_url='login')
 def profile(request):
     return render(request, 'profile.html')
 
 
-
-from django.shortcuts import render, redirect
-from django.contrib.auth.decorators import login_required
 from django.contrib.auth import update_session_auth_hash
 from django.contrib import messages
 from django.contrib.auth.models import User
+
+
+@login_required(login_url='login')
+def other_profile_view(request, user_id):
+    # Retrieve the profile of the user being viewed
+    profile_user = get_object_or_404(User, id=user_id)
+    is_friend = Friend.objects.filter(user=request.user, friend=profile_user).exists()
+
+    context = {
+        'profile_user': profile_user,
+        'is_friend': is_friend,
+    }
+    return render(request, 'other_profile.html', context)
+
+
+
 
 @login_required(login_url='login')
 def edit_profile(request):
