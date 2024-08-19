@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+
+{% block title %}Главная страница{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row mt-4">
+        <!-- Проверка, есть ли заметки -->
+        {% if notes %}
+        <!-- Цикл по всем заметкам -->
+        {% for note in notes %}
+        <div class="col-md-4 mb-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <h5 class="card-title">
+                        {{ note.title }}
+                        {% if note.is_private %}
+                        <span class="badge bg-secondary">Private</span>
+                        {% endif %}
+                    </h5>
+                    <p class="card-text">
+                        {{ note.content|truncatewords:20 }}...
+                    </p>
+                    <p class="text-muted" style="font-size: 13px;">
+                        Updated: {{ note.updated_at|date:"F j, Y, H:i" }}
+                    </p>
+                    <a href="{% url 'note-detail' note.id %}" class="btn btn-primary">Read More</a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="text-center">No notes available at the moment.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
