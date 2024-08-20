@@ -5,18 +5,50 @@
 {% block content %}
 <div class="container mt-5">
     <div class="row">
+        <!-- Profile Information -->
         <div class="col-md-4">
             <div class="card shadow-sm">
                 <div class="card-body text-center">
-                    <img src="https://carekeepr.com/assets/global/images/applicants_pic.png" class="rounded-circle mb-3" alt="Profile Picture" width="150">
+                    {% if user.image %}
+                        <img src="{{ user.image.url }}" class="rounded-circle mb-3" alt="Profile Picture" width="150">
+                    {% else %}
+                        <img src="https://d2039crxl2ddd4.cloudfront.net/user-icon.png?w=640&q=75" class="rounded-circle mb-3" alt="Profile Picture" width="150">
+                    {% endif %}
                     <h3>{{ user.username }}</h3>
                     <p class="text-muted">{{ user.email }}</p>
                     <p><strong>Joined:</strong> {{ user.date_joined|date:"F j, Y" }}</p>
                     <p><strong>Last Login:</strong> {{ user.last_login|date:"F j, Y, H:i" }}</p>
-                    <a href="{% url 'profile-edit' %}" class="btn btn-outline-primary mt-3">Edit Profile</a>
+                    {% if user == request.user %}
+                        <a href="{% url 'edit-profile' user.username %}" class="btn btn-outline-primary mt-3">Edit Profile</a>
+                    {% elif request.user.is_authenticated %}
+                        {% if is_friend %}
+                            <form action="{% url 'remove-friend' user.username %}" method="POST" style="display:inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-danger">Remove Friend</button>
+                            </form>
+                        {% elif request_sent %}
+                            <button class="btn btn-secondary" disabled>Request Sent</button>
+                        {% elif request_received %}
+                            <form action="{% url 'accept-friend-request' request_received.id %}" method="POST" style="display:inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-success">Confirm Request</button>
+                            </form>
+                            <form action="{% url 'reject-friend-request' request_received.id %}" method="POST" style="display:inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-danger">Reject Request</button>
+                            </form>
+                        {% else %}
+                            <form action="{% url 'send-friend-request' user.username %}" method="POST" style="display:inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-primary">Add Friend</button>
+                            </form>
+                        {% endif %}
+                    {% endif %}
                 </div>
             </div>
         </div>
+
+        <!-- Personal Information & Actions -->
         <div class="col-md-8">
             <div class="card shadow-sm mb-3">
                 <div class="card-header">
@@ -29,15 +61,17 @@
                 </div>
             </div>
 
+            {% if user == request.user %}
             <div class="card shadow-sm">
                 <div class="card-header">
                     <h5>Account Security</h5>
                 </div>
                 <div class="card-body">
-                    <a href="{% url 'change-password' %}" class="btn btn-outline-warning">Change Password</a>
-                    <a href="{% url 'logout' %}" type="button" class="btn btn-outline-danger me-2">LogOut</a>
+                    <a href="{% url 'change-password' user.username %}" class="btn btn-outline-warning">Change Password</a>
+                    <a href="{% url 'logout' %}" class="btn btn-outline-danger ms-2">Log Out</a>
                 </div>
             </div>
+            {% endif %}
         </div>
     </div>
 </div>

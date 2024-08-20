@@ -1,7 +1,8 @@
 from django.contrib import admin
-from .models import Note, Friend
+from .models import Note, CustomUser, FriendRequest, Friend
 
-admin.register(Note)(admin.ModelAdmin)
-admin.register(Friend)(admin.ModelAdmin)
-
+admin.site.register(Note)
+admin.site.register(FriendRequest)
+admin.site.register(Friend)
+admin.site.register(CustomUser)
 # Register your models here.

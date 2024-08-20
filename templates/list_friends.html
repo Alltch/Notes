@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+
+{% block title %}Friends of {{ user.username }}{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1>{{ user.username }}'s Friends</h1>
+
+    {% if friends %}
+        <div class="row">
+            {% for friend in friends %}
+                <div class="col-md-4">
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-body text-center">
+                            {% if friend.friend.image %}
+                            <img src="{{ friend.friend.image.url }}" class="rounded-circle mb-3" alt="Friend Picture" width="100">
+                            {% else %}
+                            <img src="https://d2039crxl2ddd4.cloudfront.net/user-icon.png?w=640&q=75" class="rounded-circle mb-3" alt="Friend Picture" width="100">
+                            {% endif %}
+                            <h5>{{ friend.friend.username }}</h5>
+                            <a href="{% url 'profile' friend.friend.username %}" class="btn btn-outline-primary mt-2">View Profile</a>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="alert alert-info mt-4">
+            {{ user.username }} has no friends yet.
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
