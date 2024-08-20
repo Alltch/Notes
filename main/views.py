@@ -1,10 +1,14 @@
+from .models import CustomUser, FriendRequest, Friend
+from django.contrib.auth import update_session_auth_hash
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.models import User
 from django.contrib import messages
-from .models import Note, Friend
+from django.db.models import Q
+
+from .models import Note, CustomUser, FriendRequest, Friend
+
 
 
 @login_required(login_url='login')
@@ -14,6 +18,7 @@ def index(request):
         'notes': all_notes
     }
     return render(request, 'index.html', context=context)
+
 
 @login_required(login_url='login')
 def other_posts(request):
@@ -26,28 +31,28 @@ def other_posts(request):
     return render(request, 'other_posts.html', context=context)
 
 
-
 @login_required(login_url='login')
 def note_edit(request, note_id):
     note = get_object_or_404(Note, id=note_id, user=request.user)
-    
+
     if request.method == "POST":
         # Получаем данные из формы
         title = request.POST.get('title')
         content = request.POST.get('content')
-        is_private = request.POST.get('is_private') == 'on'  # Обработка чекбокса
-        
+        is_private = request.POST.get(
+            'is_private') == 'on'  # Обработка чекбокса
+
         # Обновляем данные заметки
         note.title = title
         note.content = content
         note.is_private = is_private
         note.save()
-        
-        return redirect('note-detail', note_id=note_id)  # Редирект на главную или другую страницу после сохранения
-    
+
+        # Редирект на главную или другую страницу после сохранения
+        return redirect('note-detail', note_id=note_id)
+
     # Если GET-запрос, отображаем форму
     return render(request, 'note_edit.html', {'note': note})
-
 
 
 def login_in(request):
@@ -66,8 +71,8 @@ def login_in(request):
 
         # Проверяем, существует ли пользователь с таким именем
         try:
-            user = User.objects.get(username=username)
-        except User.DoesNotExist:
+            user = CustomUser.objects.get(username=username)
+        except CustomUser.DoesNotExist:
             messages.error(request, 'Username does not exist.')
             return redirect('login')
 
@@ -113,16 +118,16 @@ def register(request):
             return redirect('register')
 
         # Проверяем, существует ли пользователь с таким username или email
-        if User.objects.filter(username=username).exists():
+        if CustomUser.objects.filter(username=username).exists():
             messages.error(request, 'Username already exists.')
             return redirect('register')
 
-        if User.objects.filter(email=email).exists():
+        if CustomUser.objects.filter(email=email).exists():
             messages.error(request, 'Email already registered.')
             return redirect('register')
 
         # Создание нового пользователя
-        user = User.objects.create_user(
+        user = CustomUser.objects.create_user(
             username=username,
             email=email,
             first_name=first_name,
@@ -160,7 +165,7 @@ def delete_note(request, note_id):
     try:
         note = get_object_or_404(Note, id=note_id, user=request.user)
         note.delete()
-    
+
     except Note.DoesNotExist:
         pass
 
@@ -174,141 +179,163 @@ def note_add(request):
         content = request.POST.get('content')
         is_private = request.POST.get('is_private') == 'on'
 
-        Note.objects.create(user=request.user, title=title, content=content, is_private=is_private)
+        Note.objects.create(user=request.user, title=title,
+                            content=content, is_private=is_private)
         return redirect('home')
 
     return render(request, 'note_add.html')
 
 
-
-
 @login_required(login_url='login')
-def friends_list(request):
-    query = request.GET.get('q')
-    if query:
-        friends = User.objects.filter(username__icontains=query)
-    else:
-        friends = Friend.objects.filter(user=request.user)
+def profile(request, username):
+    user = get_object_or_404(CustomUser, username=username)
 
-    return render(request, 'friends_list.html', {'friends': friends, 'query': query})
+    # Determine friend status
+    is_friend = Friend.objects.filter(user=request.user, friend=user).exists()
+    request_sent = FriendRequest.objects.filter(from_user=request.user, to_user=user, is_active=True).exists()
+    request_received = FriendRequest.objects.filter(from_user=user, to_user=request.user, is_active=True).exists()
 
-
-
-
-
-@login_required(login_url='login')
-def add_friend(request):
-    if request.method == 'POST':
-        friend_username = request.POST.get('friend_username')
-        friend_user = get_object_or_404(User, username=friend_username)
-
-        if not Friend.objects.filter(user=request.user, friend=friend_user).exists() and not Friend.objects.filter(user=friend_user, friend=request.user).exists():
-            Friend.objects.create(user=request.user, friend=friend_user)
-        
-        return redirect('friends')
-
-    return render(request, 'add_friend.html')
-
-
-@login_required(login_url='login')
-def profile_view(request, user_id):
-    profile_user = get_object_or_404(User, id=user_id)
-    is_friend = Friend.objects.filter(user=request.user, friend=profile_user).exists()
-    
     context = {
-        'profile_user': profile_user,
-        'is_own_profile': request.user == profile_user,
+        'user': user,
         'is_friend': is_friend,
+        'request_sent': request_sent,
+        'request_received': request_received
     }
+
     return render(request, 'profile.html', context)
 
-
-
 @login_required(login_url='login')
-def search_friends(request):
-    query = request.GET.get('q', '')
-    if query:
-        users = User.objects.filter(username__icontains=query).exclude(id=request.user.id)
-    else:
-        users = User.objects.none()
+def edit_profile(request, username):
+    user = get_object_or_404(CustomUser, username=username)
 
-    results = [{'id': user.id, 'username': user.username} for user in users]
-    return JsonResponse(results, safe=False)
+    # Проверка, что пользователь имеет право редактировать профиль
+    if request.user != user:
+        messages.error(
+            request, 'You do not have permission to edit this profile.')
+        return redirect('profile', username=user.username)
 
-
-
-
-@login_required(login_url='login')
-def profile(request):
-    return render(request, 'profile.html')
-
-
-from django.contrib.auth import update_session_auth_hash
-from django.contrib import messages
-from django.contrib.auth.models import User
-
-
-@login_required(login_url='login')
-def other_profile_view(request, user_id):
-    # Retrieve the profile of the user being viewed
-    profile_user = get_object_or_404(User, id=user_id)
-    is_friend = Friend.objects.filter(user=request.user, friend=profile_user).exists()
-
-    context = {
-        'profile_user': profile_user,
-        'is_friend': is_friend,
-    }
-    return render(request, 'other_profile.html', context)
-
-
-
-
-@login_required(login_url='login')
-def edit_profile(request):
     if request.method == 'POST':
         first_name = request.POST.get('first_name')
         last_name = request.POST.get('last_name')
         email = request.POST.get('email')
 
         # Update user information
-        request.user.first_name = first_name
-        request.user.last_name = last_name
-        request.user.email = email
-        request.user.save()
+        if first_name and last_name and email:
+            user.first_name = first_name
+            user.last_name = last_name
+            user.email = email
+            user.save()
 
-        messages.success(request, 'Your profile was successfully updated!')
-        return redirect('profile')
+            messages.success(request, 'Your profile was successfully updated!')
+            return redirect('profile', username=user.username)
+        else:
+            messages.error(request, 'Please fill out all fields.')
 
-    return render(request, 'edit_profile.html', {
-        'user': request.user,
-    })
-
+    return render(request, 'edit_profile.html', {'user': user})
 
 
 @login_required(login_url='login')
-def change_password(request):
+def change_password(request, username):
+    user = get_object_or_404(CustomUser, username=username)
+
+    # Проверка, что текущий пользователь имеет право менять пароль
+    if request.user != user:
+        messages.error(
+            request, 'You do not have permission to change this password.')
+        return redirect('profile', username=user.username)
+
     if request.method == 'POST':
         old_password = request.POST.get('old_password')
         new_password1 = request.POST.get('new_password1')
         new_password2 = request.POST.get('new_password2')
 
-        # Check if old password is correct
-        if not request.user.check_password(old_password):
-            messages.error(request, 'Your old password was entered incorrectly. Please try again.')
-            return redirect('password_change')
+        # Проверка правильности старого пароля
+        if not user.check_password(old_password):
+            messages.error(
+                request, 'Your old password was entered incorrectly. Please try again.')
+            return redirect('change-password', username=user.username)
 
-        # Check if new passwords match
+        # Проверка совпадения новых паролей
         if new_password1 != new_password2:
-            messages.error(request, 'The two new password fields didn’t match.')
-            return redirect('password_change')
+            messages.error(
+                request, 'The two new password fields didn’t match.')
+            return redirect('change-password', username=user.username)
 
-        # Update the password
-        request.user.set_password(new_password1)
-        request.user.save()
+        # Обновление пароля
+        user.set_password(new_password1)
+        user.save()
 
-        # Keep the user logged in after changing the password
-        update_session_auth_hash(request, request.user)
+        # Оставляем пользователя залогиненным после смены пароля
+        update_session_auth_hash(request, user)
         messages.success(request, 'Your password was successfully updated!')
-        return redirect('profile')
+        return redirect('profile', username=user.username)
 
-    return render(request, 'password_change.html')
+    return render(request, 'password_change.html', {'user': user})
+
+
+@login_required(login_url='login')
+def search_friends(request):
+    query = request.GET.get('q')
+
+    if query:
+        users = CustomUser.objects.filter(
+            Q(username__icontains=query)).exclude(id=request.user.id)
+
+    else:
+        users = CustomUser.objects.none()
+
+    context = {
+        'users': users
+    }
+    return render(request, 'search_friends.html', context=context)
+
+
+@login_required(login_url='login')
+def send_friend_request(request, username):
+    to_user = get_object_or_404(CustomUser, username=username)
+    from_user = request.user
+
+    if from_user != to_user:
+        # Delete any previous inactive friend requests between these two users
+        FriendRequest.objects.filter(
+            from_user=from_user, to_user=to_user, is_active=False).delete()
+
+        # Create a new friend request
+        friend_request, created = FriendRequest.objects.get_or_create(
+            from_user=from_user, to_user=to_user)
+        if created:
+            messages.success(request, 'Friend request sent successfully!')
+        else:
+            messages.warning(request, 'Friend request already sent!')
+
+    return redirect('profile', username=username)
+
+
+@login_required(login_url='login')
+def accept_friend_request(request, request_id):
+    friend_request = get_object_or_404(FriendRequest, id=request_id)
+
+    if friend_request.to_user == request.user:
+        friend_request.accept()
+        messages.success(request, 'Friend request accepted!')
+
+    return redirect('profile', username=friend_request.from_user.username)
+
+
+@login_required(login_url='login')
+def reject_friend_request(request, request_id):
+    friend_request = get_object_or_404(FriendRequest, id=request_id)
+
+    if friend_request.to_user == request.user:
+        friend_request.reject()
+        messages.success(request, 'Friend request rejected!')
+
+    return redirect('profile', username=friend_request.from_user.username)
+
+
+@login_required(login_url='login')
+def list_friends(request, username):
+    user = get_object_or_404(CustomUser, username=username)
+    friends = Friend.objects.filter(user=user)
+
+    return render(request, 'list_friends.html', {'friends': friends, 'user': user})
